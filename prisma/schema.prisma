@@ -1,0 +1,71 @@
+// Reference schema matching the live Supabase Postgres tables (created via
+// a raw SQL migration, not via Prisma). The app itself talks to Supabase
+// through @supabase/supabase-js (see lib/db.ts), not through Prisma — this
+// file is here in case you'd rather query through Prisma/an ORM later.
+// Row-level security policies (scoping every row to auth.uid()) live in the
+// database, not here, and apply regardless of which client queries it.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id                String    @id @db.Uuid
+  name              String    @default("")
+  title             String?   @default("")
+  yearsExperience   Int?      @map("years_experience")
+  backgroundSummary String?   @default("") @map("background_summary")
+  linkedinUrl       String?   @default("") @map("linkedin_url")
+  deliveryEmail     String    @default("") @map("delivery_email")
+  deliveryMethod    String    @default("email") @map("delivery_method")
+  gmailOptIn        Boolean   @default(false) @map("gmail_opt_in")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@map("profiles")
+}
+
+model Resume {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  fileName   String   @map("file_name")
+  tags       String[]
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+
+  @@map("resumes")
+}
+
+model SearchCriteria {
+  userId          String   @id @map("user_id") @db.Uuid
+  roleLevels      String[] @map("role_levels")
+  focusAreas      String[] @map("focus_areas")
+  locations       String[]
+  targetCompanies String[] @map("target_companies")
+  exclusions      String?  @default("")
+
+  @@map("search_criteria")
+}
+
+model JobMatch {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  datePulled     DateTime @default(now()) @map("date_pulled") @db.Date
+  tier           String   @default("Monitoring")
+  jobTitle       String   @map("job_title")
+  company        String
+  location       String?  @default("")
+  compRange      String?  @default("") @map("comp_range")
+  matchStars     String?  @default("") @map("match_stars")
+  rationale      String?  @default("")
+  resumeBaseline String?  @default("") @map("resume_baseline")
+  draftFile      String?  @default("") @map("draft_file")
+  applyLink      String?  @default("") @map("apply_link")
+  status         String   @default("New")
+  notes          String?  @default("")
+
+  @@map("job_matches")
+}
