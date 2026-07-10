@@ -177,9 +177,13 @@ export default function OnboardingWizard() {
     });
   }
 
-  async function handleResumeFiles(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+async function handleResumeFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+    // Materialize into a real array before touching e.target.value — resetting
+    // the input's value clears the live FileList in some browsers (Chrome
+    // included), which was silently zeroing out the upload before it ran.
+    const selectedFiles = Array.from(fileList);
     e.target.value = "";
 
     setUploading(true);
@@ -193,7 +197,7 @@ export default function OnboardingWizard() {
       if (!user) throw new Error("Not signed in");
 
       const uploaded: ResumeFile[] = [];
-      for (const file of Array.from(files)) {
+      for (const file of selectedFiles) {
         const path = `${user.id}/${Date.now()}-${sanitizeFileName(file.name)}`;
         const { error: uploadErr } = await supabase.storage
           .from("resumes")
