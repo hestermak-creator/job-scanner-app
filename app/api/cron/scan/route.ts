@@ -105,7 +105,23 @@ export async function GET(request: NextRequest) {
         model: MODEL,
         max_tokens: 8000,
         messages: [{ role: "user", content: prompt }],
-        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 15 }]
+        tools: [
+          {
+            name: "web_search",
+            description:
+              "Search the web for job postings, company details, and LinkedIn signal relevant to this user's role and experience.",
+            input_schema: {
+              type: "object",
+              properties: {
+                query: {
+                  type: "string",
+                  description: "The search query for the web search tool."
+                }
+              },
+              required: ["query"]
+            }
+          }
+        ]
       });
 
       const fullText = response.content
