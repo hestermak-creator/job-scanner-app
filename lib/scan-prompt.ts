@@ -1,11 +1,18 @@
-// Builds the personalized daily-scan prompt for one user, the same way
-// Hester's original hand-written scanner prompt worked — except every
-// "Hester-specific" value below is now pulled from that user's onboarding
-// profile instead of being typed in by hand.
+// Two prompt builders here, serving different purposes:
 //
-// The nightly job (see README > "Wiring up the real scan") should call
-// buildScanPrompt(profile) and hand the result to the Claude Agent SDK
-// with web-search, and — only if gmailOptIn is true — Gmail read tools.
+// - buildScanPrompt(): the full aspirational pipeline (Gmail alerts, web
+//   search, ranking, AND tailored "ALT:" resume draft generation) — written
+//   for a fully agentic runner with file-write tools, like the original
+//   hand-written scanner this app is based on. Not called by the actual
+//   cron job (see below); kept as a reference for when draft generation
+//   gets built.
+// - buildMatchingPrompt(): what app/api/cron/scan/route.ts actually calls.
+//   Trimmed to search + rank only, and asks Claude to end with a fenced
+//   JSON array so the route can parse and insert rows programmatically —
+//   a single Messages API call, no agentic file tools involved.
+//
+// Both pull every "Hester-specific" value from the user's onboarding
+// profile instead of having it typed in by hand.
 
 import { UserProfile } from "./types";
 
@@ -34,11 +41,7 @@ This user has not opted into Gmail alert scanning. Skip straight to web search.`
 ## Background summary
 ${profile.backgroundSummary || "(not provided)"}
 
-${profile.linkedinUrl ? `## LinkedIn profile
-If available, scrape the user's LinkedIn profile to confirm current role, experience, skills, and key accomplishments. Use that data to enrich job matching and tailor resume suggestions.
-- LinkedIn URL: ${profile.linkedinUrl}
-
-` : ""}## Search criteria
+## Search criteria
 - **Role levels:** ${profile.roleLevels.join(", ") || "(not specified)"}
 - **Focus areas:** ${profile.focusAreas.join(", ") || "(not specified)"}
 - **Locations:** ${profile.locations.join(", ") || "(not specified)"}
@@ -52,10 +55,9 @@ ${gmailStep}
 ## Step 2 — Web search for additional openings
 
 Search LinkedIn, Google Jobs, and company career pages/Greenhouse for postings
-matching the criteria above. If the user's LinkedIn profile is available, also
-compare postings against their current LinkedIn experience and skills. Run
-targeted `site:` queries for each target company's career page. For each
-promising result, fetch the job description URL to confirm it's real and active.
+matching the criteria above. Run targeted \`site:\` queries for each target
+company's career page. For each promising result, fetch the job description
+URL to confirm it's real and active.
 
 ## Step 3 — Filter and rank
 
@@ -86,4 +88,82 @@ monitoring entries), and send/save a digest to: ${
     profile.deliveryEmail || "(no delivery email on file)"
   } via ${profile.deliveryMethod === "email" ? "email" : "in-app notification only"}.
 `;
+}
+
+export interface ExistingMatchKey {
+  company: string;
+  jobTitle: string;
+}
+
+// What the cron job actually sends to the Messages API, paired with the
+// web_search tool. Ends with an explicit instruction to close out with a
+// fenced JSON array — the route parses that block back out of the response
+// text and inserts rows from it.
+export function buildMatchingPrompt(
+  profile: UserProfile,
+  existingMatches: ExistingMatchKey[]
+): string {
+  const resumeGuide = profile.resumes.length
+    ? profile.resumes
+        .map((r) => `- ${r.tags.join(", ") || "General"} → "${r.name}"`)
+        .join("\n")
+    : "- No resumes on file — leave resumeBaseline as an empty string for every match.";
+
+  const existingList = existingMatches.length
+    ? existingMatches.map((m) => `- ${m.company} — ${m.jobTitle}`).join("\n")
+    : "(none yet — this is the first scan for this user)";
+
+  return `You are running a daily job scan for ${profile.name || "this user"}${
+    profile.title ? `, a ${profile.title}` : ""
+  }${profile.yearsExperience ? ` with ${profile.yearsExperience}+ years of experience` : ""}.
+
+## Background
+${profile.backgroundSummary || "(not provided)"}
+
+## Search criteria
+- Role levels: ${profile.roleLevels.join(", ") || "(not specified)"}
+- Focus areas: ${profile.focusAreas.join(", ") || "(not specified)"}
+- Locations: ${profile.locations.join(", ") || "(not specified)"}
+- Exclude: ${profile.exclusions || "(none specified)"}
+- Target companies: always explicitly check these via site: queries on their
+  career pages, in addition to general web search — ${profile.targetCompanies.join(", ") || "(none specified)"}.
+  Also surface strong matches at other companies found via general search.
+
+## Resume options (for picking resumeBaseline below)
+${resumeGuide}
+
+## Already tracked for this user — do not repeat these
+${existingList}
+
+## Task
+Search the web (company career pages, Greenhouse, LinkedIn, Google Jobs) for
+roles matching the criteria above. Where possible, open promising results to
+confirm the posting looks real and currently active. Identify the top 3-5
+best-fit matches ("Top Match" tier) plus 2-3 honorable mentions worth
+monitoring ("Monitoring" tier). Skip anything already in the tracked list
+above, even if the wording differs slightly.
+
+## Output format
+
+After finishing your research, end your entire response with a single fenced
+json code block containing ONLY a JSON array — no other text inside the
+fence — of objects with exactly these fields:
+
+\`\`\`json
+[
+  {
+    "tier": "Top Match",
+    "jobTitle": "string",
+    "company": "string",
+    "location": "string",
+    "compRange": "string, use \\"Not listed\\" if unknown",
+    "matchStars": "1-5 star characters, e.g. \\"★★★★☆\\"",
+    "rationale": "1-2 sentence explanation of the fit",
+    "resumeBaseline": "the best filename from the resume options above, or empty string if none",
+    "applyLink": "the actual posting URL"
+  }
+]
+\`\`\`
+
+If you find no good matches, output an empty array: \`[]\`.`;
 }

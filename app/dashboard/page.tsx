@@ -67,8 +67,8 @@ export default async function DashboardPage() {
       {isSample && (
         <div className="text-[13px] bg-amber-50 text-amber-800 rounded-2xl px-4 py-3 mb-6 border border-amber-100">
           Showing sample data. This populates automatically with your real
-          matches once the nightly scan job (see README) is wired up and
-          running for your account.
+          matches after the nightly scan runs for your account (once a day,
+          automatically — see README if you want to trigger it manually).
         </div>
       )}
 

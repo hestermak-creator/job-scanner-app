@@ -1,0 +1,11 @@
+{
+  "remoteName": "origin",
+  "projects": [
+    {
+      "id": "prj_nj9RaPjpDr3eHyD9t2SUXgHGy297",
+      "name": "job-scanner-app",
+      "directory": ".",
+      "orgId": "team_DjhCutd5d1PF9r1hSn3TnGw4"
+    }
+  ]
+}

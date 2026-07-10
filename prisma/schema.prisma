@@ -30,12 +30,11 @@ model Profile {
 }
 
 model Resume {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
-  fileName    String   @map("file_name")
-  storagePath String?  @map("storage_path")
-  tags        String[]
-  uploadedAt  DateTime @default(now()) @map("uploaded_at")
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  fileName   String   @map("file_name")
+  tags       String[]
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
 
   @@map("resumes")
 }

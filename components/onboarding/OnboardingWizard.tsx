@@ -177,7 +177,7 @@ export default function OnboardingWizard() {
     });
   }
 
-async function handleResumeFiles(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleResumeFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
     // Materialize into a real array before touching e.target.value — resetting
@@ -191,18 +191,14 @@ async function handleResumeFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const supabase = createClient();
 
     try {
-        const { data, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
-      const user = data?.user;
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
 
       const uploaded: ResumeFile[] = [];
       for (const file of selectedFiles) {
-        const randomId =
-          typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const path = `${user.id}/${randomId}-${sanitizeFileName(file.name)}`;
+        const path = `${user.id}/${Date.now()}-${sanitizeFileName(file.name)}`;
         const { error: uploadErr } = await supabase.storage
           .from("resumes")
           .upload(path, file, { upsert: false });
@@ -217,12 +213,7 @@ async function handleResumeFiles(e: React.ChangeEvent<HTMLInputElement>) {
       }
       update("resumes", [...form.resumes, ...uploaded]);
     } catch (err) {
-      console.error("Resume upload failed", err);
-      setUploadError(
-        err instanceof Error
-          ? err.message
-          : "Couldn't upload one or more files. Try again."
-      );
+      setUploadError("Couldn't upload one or more files. Try again.");
     } finally {
       setUploading(false);
     }
@@ -234,11 +225,7 @@ async function handleResumeFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const { data, error: signErr } = await supabase.storage
       .from("resumes")
       .createSignedUrl(r.storagePath, 60);
-    if (signErr) {
-      console.error("Could not create signed URL for resume", signErr);
-      return;
-    }
-    if (!data) return;
+    if (signErr || !data) return;
     window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   }
 
@@ -349,8 +336,9 @@ async function handleResumeFiles(e: React.ChangeEvent<HTMLInputElement>) {
             <h2 className="text-lg font-semibold mb-2 text-violet-900">Resumes</h2>
             <p className="text-[13px] text-slate-500 mb-4">
               Upload one or more resumes — the file itself is stored (privately,
-              just for you). Each gets auto-tagged with the job categories it&apos;s
-              strongest for.
+              just for you), not just the name. Each gets auto-tagged with the
+              job categories it&apos;s strongest for — confirm or edit the tags
+              before finishing.
             </p>
             <input
               ref={fileInputRef}
@@ -425,8 +413,7 @@ async function handleResumeFiles(e: React.ChangeEvent<HTMLInputElement>) {
               />
             </Field>
             <p className="text-[13px] text-slate-400">
-              We use this to enrich your job match profile and tailor matches from
-              your LinkedIn experience.
+              Used as a reference link only — we don&apos;t scrape LinkedIn data.
             </p>
           </div>
         )}

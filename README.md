@@ -24,10 +24,19 @@ just app logic.
 - A private `resumes` Storage bucket holds the actual uploaded files, one
   folder per user ID (`${userId}/...`), with storage-level RLS policies
   matching the same "only your own" rule.
-- `lib/scan-prompt.ts` — takes a saved `UserProfile` and builds the same
-  kind of prompt the original hand-written scanner used, just filled in
-  from the database instead of typed by hand. This is the piece that
-  still needs to be wired to an actual scheduled job (see below).
+- `lib/scan-prompt.ts` — `buildMatchingPrompt()` builds the search/rank
+  prompt actually used by the scan (see below); `buildScanPrompt()` is the
+  fuller aspirational version including resume-draft generation, kept as a
+  reference for later.
+- `app/api/cron/scan/route.ts` — the nightly scan. Loops over every saved
+  profile, calls Claude (with the web search tool) to find and rank
+  matching roles, and inserts new rows into `job_matches`. Runs once a day
+  via Vercel Cron (`vercel.json`), and is bearer-token protected with
+  `CRON_SECRET` so nobody else can trigger it.
+- `lib/supabase/admin.ts` — a service-role Supabase client, used only by
+  the cron route. It's the one place in the app that legitimately bypasses
+  row-level security, since the nightly job has to read and write every
+  user's rows in one run rather than acting as a single signed-in user.
 
 ## Running it
 
@@ -42,14 +51,44 @@ public anon key (safe to ship — RLS is what actually protects the data,
 not keeping this key secret). Visit `/onboarding`, sign in with your email
 via the magic link, fill out your profile, then check `/dashboard`.
 
+## Running the nightly scan
+
+Three env vars are required beyond the two already in `.env.local` — see
+`.env.example` for where each comes from: `ANTHROPIC_API_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`, and `CRON_SECRET`. Add all three to Vercel's
+project settings (Environment Variables) for it to run in production; add
+them to `.env.local` too if you want to trigger it locally.
+
+To test it manually rather than waiting for the schedule:
+
+```bash
+curl -H "Authorization: Bearer YOUR_CRON_SECRET" https://your-app.vercel.app/api/cron/scan
+```
+
+It responds with a per-user summary (`{ inserted, found }` or `{ error }`
+for each user ID) so you can see what happened without digging through
+logs. `vercel.json` schedules it for `0 13 * * *` (once daily, sometime in
+that UTC hour — Vercel Hobby doesn't guarantee the exact minute). Change
+the cron expression there if you want a different time.
+
+Cost note: each user scanned costs one Claude API call with up to 15 web
+searches (~$0.15/scan in search fees alone, per Anthropic's $10/1,000
+searches pricing, plus token costs) — trivial at family-and-friends scale,
+but worth knowing since it's metered.
+
+Scale note: it loops over users sequentially in a single function
+invocation, capped at Vercel's 300s Hobby/Fluid limit. Fine for a handful
+of users; past roughly 8-10, split into one invocation per user (e.g. a
+dynamic route per user ID, each with its own cron entry) instead.
+
 ## What's not built yet (on purpose)
 
-- **No real scan job.** `lib/scan-prompt.ts` builds the prompt; nothing
-  calls it yet. Wiring this up means: pick a scheduler (Trigger.dev or
-  Inngest), write a nightly function that loops over saved profiles, calls
-  `buildScanPrompt(profile)`, runs it through the Claude Agent SDK with
-  web-search (and Gmail read, only for opted-in users) tools, and writes
-  results back via `appendJobMatches(userId, matches)`.
+- **No tailored resume drafts.** The scan finds and ranks matches, but
+  doesn't generate the "ALT: suggestion" tailored `.docx` per match yet —
+  that's `buildScanPrompt()`'s Step 5, intentionally not wired into the
+  cron job in this pass. It's a meaningfully separate piece: reading the
+  uploaded resume from Storage, generating a formatted document, and
+  storing it back. `draft_file` stays empty on every row until that's built.
 - **Resume tagging is still a filename guess.** The file itself now
   uploads for real to a private Supabase Storage bucket (`resumes`, RLS'd
   to `${userId}/...` paths — see `handleResumeFiles` in the wizard), and
