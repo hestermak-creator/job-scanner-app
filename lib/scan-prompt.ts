@@ -34,7 +34,11 @@ This user has not opted into Gmail alert scanning. Skip straight to web search.`
 ## Background summary
 ${profile.backgroundSummary || "(not provided)"}
 
-## Search criteria
+${profile.linkedinUrl ? `## LinkedIn profile
+If available, scrape the user's LinkedIn profile to confirm current role, experience, skills, and key accomplishments. Use that data to enrich job matching and tailor resume suggestions.
+- LinkedIn URL: ${profile.linkedinUrl}
+
+` : ""}## Search criteria
 - **Role levels:** ${profile.roleLevels.join(", ") || "(not specified)"}
 - **Focus areas:** ${profile.focusAreas.join(", ") || "(not specified)"}
 - **Locations:** ${profile.locations.join(", ") || "(not specified)"}
@@ -48,9 +52,10 @@ ${gmailStep}
 ## Step 2 — Web search for additional openings
 
 Search LinkedIn, Google Jobs, and company career pages/Greenhouse for postings
-matching the criteria above. Run targeted \`site:\` queries for each target
-company's career page. For each promising result, fetch the job description
-URL to confirm it's real and active.
+matching the criteria above. If the user's LinkedIn profile is available, also
+compare postings against their current LinkedIn experience and skills. Run
+targeted `site:` queries for each target company's career page. For each
+promising result, fetch the job description URL to confirm it's real and active.
 
 ## Step 3 — Filter and rank
 
